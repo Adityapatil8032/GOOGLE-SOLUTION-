@@ -15,15 +15,21 @@ export const Layout = () => {
 
   useEffect(() => {
     const q = query(collection(db, 'broadcasts'), orderBy('createdAt', 'desc'), limit(1));
-    const unsub = onSnapshot(q, (snap) => {
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
-        if (Date.now() - new Date(data.createdAt?.toDate?.() || Date.now()).getTime() < 3600000) {
-          setBroadcast(data);
-          setTimeout(() => setBroadcast(null), 10000);
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const data = snap.docs[0].data();
+          if (Date.now() - new Date(data.createdAt?.toDate?.() || Date.now()).getTime() < 3600000) {
+            setBroadcast(data);
+            setTimeout(() => setBroadcast(null), 10000);
+          }
         }
+      },
+      () => {
+        setBroadcast(null);
       }
-    });
+    );
     return () => unsub();
   }, []);
 

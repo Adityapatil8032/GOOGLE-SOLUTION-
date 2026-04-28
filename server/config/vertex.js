@@ -7,6 +7,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const isManagedGoogleRuntime = Boolean(process.env.K_SERVICE || process.env.K_REVISION);
 
 const DEFAULT_VERTEX_CREDENTIAL_CANDIDATES = [
   process.env.VERTEX_CREDENTIALS_PATH,
@@ -48,14 +49,20 @@ export const resolveVertexCredentials = () => {
 
 export const getVertexConfigStatus = () => {
   const resolved = resolveVertexCredentials();
-  const configuredProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID || null;
+  const configuredProjectId =
+    process.env.GOOGLE_CLOUD_PROJECT_ID ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    null;
   const credentialProjectId = resolved?.credentials?.project_id || null;
+  const usingApplicationDefaultCredentials =
+    !resolved?.path && isManagedGoogleRuntime && Boolean(configuredProjectId);
 
   return {
     configuredProjectId,
     credentialProjectId,
     credentialsPath: resolved?.path || null,
-    projectMatch: Boolean(
+    usingApplicationDefaultCredentials,
+    projectMatch: usingApplicationDefaultCredentials || Boolean(
       configuredProjectId &&
       credentialProjectId &&
       configuredProjectId === credentialProjectId

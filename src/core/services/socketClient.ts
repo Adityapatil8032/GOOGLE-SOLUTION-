@@ -1,19 +1,24 @@
 import { io, type Socket } from 'socket.io-client';
+import { apiBaseUrl, socketServerUrl } from '../config/api';
 
 let socketInstance: Socket | null = null;
 let activeIdentity: { userId: string; userRole: string } | null = null;
 let connectListener: (() => void) | null = null;
 
 const resolveSocketUrl = () => {
-  if (import.meta.env.VITE_SOCKET_SERVER_URL) {
-    return import.meta.env.VITE_SOCKET_SERVER_URL;
+  if (socketServerUrl) {
+    return socketServerUrl;
   }
 
   if (typeof window === 'undefined') {
-    return 'http://localhost:3001';
+    return apiBaseUrl || 'http://localhost:8080';
   }
 
-  return `${window.location.protocol}//${window.location.hostname}:3001`;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${window.location.protocol}//${window.location.hostname}:8080`;
+  }
+
+  return window.location.origin;
 };
 
 export const connectSocket = (userId: string, userRole: string) => {

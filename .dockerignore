@@ -1,0 +1,11 @@
+node_modules
+.env
+.env.*
+.git
+dist
+build
+.vscode
+server/serviceAccount.json
+src/google-credentials.json
+stitch_reliefsync_community_platform
+scratch

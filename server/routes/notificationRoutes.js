@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../config/firebase-admin.js';
 import {
   calculateDistance,
+  claimVolunteerReport,
   findNearbyVolunteers,
   handleVolunteerResponse,
   listNotificationsForUser,
@@ -148,6 +149,35 @@ router.get('/volunteers/nearby', async (req, res) => {
   } catch (error) {
     console.error('nearby volunteers failed:', error);
     return res.status(500).json({ error: error.message || 'Failed to find nearby volunteers.' });
+  }
+});
+
+router.post('/claim-report', async (req, res) => {
+  try {
+    const { reportId, volunteerId } = req.body ?? {};
+    const result = await claimVolunteerReport({ reportId, volunteerId });
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    console.error('claim-report failed:', error);
+
+    const code = error.message || 'CLAIM_FAILED';
+    if (code === 'NOT_REGISTERED') {
+      return res.status(403).json({ errorCode: code, error: 'Volunteer registration not found.' });
+    }
+    if (code === 'NOT_APPROVED') {
+      return res.status(403).json({ errorCode: code, error: 'Volunteer approval is still pending.' });
+    }
+    if (code === 'NOT_FOUND') {
+      return res.status(404).json({ errorCode: code, error: 'Report not found.' });
+    }
+    if (code === 'ALREADY_ASSIGNED') {
+      return res.status(409).json({ errorCode: code, error: 'This mission has already been assigned.' });
+    }
+    if (code === 'CLAIM_UNAVAILABLE') {
+      return res.status(409).json({ errorCode: code, error: 'This mission is no longer claimable.' });
+    }
+
+    return res.status(500).json({ errorCode: 'CLAIM_FAILED', error: 'Failed to claim report.' });
   }
 });
 

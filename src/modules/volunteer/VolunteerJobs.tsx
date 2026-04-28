@@ -7,15 +7,13 @@ import {
   onSnapshot,
   doc,
   getDoc,
-  runTransaction,
-  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../core/firebase/config';
+import { apiUrl } from '../../core/config/api';
 import { googleMapsLibraries, googleMapsScriptId } from '../../core/maps/googleMaps';
 import { useStore } from '../../core/store/useStore';
 import { CircleF, GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { FullMapScreen } from '../../components/FullMapScreen';
-import { googleMapsMapId } from '../../config/googleMaps';
 
 const SEVERITY_ZONE_STYLE: Record<string, { radius: number; fillOpacity: number }> = {
   Critical: { radius: 900, fillOpacity: 0.28 },
@@ -229,67 +227,19 @@ export const VolunteerJobs = () => {
     console.log(`[EXECUTION] User UID: ${user.id} | Action: Claim Job ${jobId}`);
 
     try {
-      await runTransaction(db, async (transaction) => {
-        // Requirement 1: Fetch volunteer document and check status
-        const volunteerRef = doc(db, 'volunteers', user.id);
-        const volunteerSnapshot = await transaction.get(volunteerRef);
-        
-        console.log(`[STAGING] Volunteer Doc Presence: ${volunteerSnapshot.exists()}`);
-        
-        if (!volunteerSnapshot.exists()) {
-          throw new Error("NOT_REGISTERED");
-        }
-        
-        const volunteerData = volunteerSnapshot.data();
-        console.log(`[STAGING] Volunteer Approval Status: ${volunteerData.approved} (${typeof volunteerData.approved})`);
-        
-        // Requirement 1: Ensure approved is boolean true
-        if (volunteerData.approved !== true) {
-          throw new Error("NOT_APPROVED");
-        }
-
-        // Requirement 2: Validate job status
-        const jobRef = doc(db, 'reports', jobId);
-        const jobDoc = await transaction.get(jobRef);
-
-        if (!jobDoc.exists()) {
-          throw new Error("NOT_FOUND");
-        }
-
-        const data = jobDoc.data();
-        console.log(`[STAGING] Job Status: ${data.status} | Already Assigned: ${!!data.assignedTo}`);
-        
-        if (data.status !== 'open' || data.assignedTo) {
-          throw new Error("ALREADY_ASSIGNED");
-        }
-
-        // Requirement 3: Safe Transactional Updates
-        // 1. Update Global Report
-        transaction.update(jobRef, {
-          assignedTo: user.id,
-          assignedAt: serverTimestamp(),
-          assignedResponderName: user.name,
-          progressNote: `${user.name || 'A responder'} accepted your report and is preparing the safest route to your location.`,
-          etaText: 'Route check in progress',
-          status: 'assigned',
-          updatedAt: serverTimestamp(),
-          missionStatus: 'assigned',
-        });
-        
-        // 2. Log Action in taskUpdates
-        const updateRef = doc(collection(db, 'taskUpdates'));
-        transaction.set(updateRef, {
-          taskId: jobId,
+      const response = await fetch(apiUrl('/api/notifications/claim-report'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportId: jobId,
           volunteerId: user.id,
-          userName: user.name,
-          type: 'claim',
-          title: 'Responder accepted the mission',
-          message: `${user.name || 'A responder'} has taken ownership of this incident and is getting ready to move.`,
-          note: `System Audit: Mission claimed by verified responder ${user.name} (UID: ${user.id.slice(0, 8)})`,
-          createdAt: serverTimestamp(),
-        });
-
+        }),
       });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.errorCode || result.error || 'CLAIM_FAILED');
+      }
       
       alert('Mission successfully claimed! Check "My Tasks" for deployment details.');
     } catch (error: any) {
@@ -304,6 +254,8 @@ export const VolunteerJobs = () => {
         userMsg = WAITING_APPROVAL_MESSAGE;
       } else if (error.message === 'ALREADY_ASSIGNED') {
         userMsg = 'Job already assigned: Another responder has already claimed this mission.';
+      } else if (error.message === 'CLAIM_UNAVAILABLE') {
+        userMsg = 'This mission is no longer claimable. Refresh to see the latest availability.';
       } else if (error.message === 'NOT_FOUND') {
         userMsg = 'Error: The selected mission data could not be found.';
       } else if (error.code === 'permission-denied') {
@@ -316,8 +268,6 @@ export const VolunteerJobs = () => {
         } else {
           userMsg = 'Mission claim blocked by Firestore permissions. Refresh and try again.';
         }
-      } else if (error.code === 'aborted') {
-        userMsg = 'This mission changed while you were claiming it. Refresh and try again.';
       }
       
       alert(userMsg);
@@ -476,7 +426,6 @@ export const VolunteerJobs = () => {
                   stylers: [{ saturation: -100 }, { lightness: 10 }]
                 }
               ],
-              mapId: googleMapsMapId,
               disableDefaultUI: true,
               zoomControl: true,
               scrollwheel: true,

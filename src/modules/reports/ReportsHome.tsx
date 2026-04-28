@@ -8,6 +8,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { apiUrl } from '../../core/config/api';
 import { db, storage } from '../../core/firebase/config';
 import { useStore } from '../../core/store/useStore';
 import { getInitials } from '../../core/utils/user';
@@ -106,7 +107,7 @@ export const ReportsHome = () => {
       // AI Analysis
       let aiAnalysis = null;
       try {
-        const aiRes = await fetch('/api/ai/ai-analyze', {
+        const aiRes = await fetch(apiUrl('/api/ai/ai-analyze'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: form.description }),
@@ -139,7 +140,7 @@ export const ReportsHome = () => {
 
       setDispatchingVolunteers(true);
       try {
-        const notificationResponse = await fetch('/api/notifications/process-report', {
+        const notificationResponse = await fetch(apiUrl('/api/notifications/process-report'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -170,7 +171,7 @@ export const ReportsHome = () => {
 
         // 2. Dispatch Push Notifications via Backend
         try {
-          await fetch('/api/notifications/dispatch', {
+          await fetch(apiUrl('/api/notifications/dispatch'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reportId: reportRef.id, location: form.location }),

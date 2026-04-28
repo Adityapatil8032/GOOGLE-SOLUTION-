@@ -518,6 +518,110 @@ export const handleTaskStatusUpdate = async ({ taskId, status, volunteerId }) =>
   };
 };
 
+export const claimVolunteerReport = async ({ reportId, volunteerId }) => {
+  if (!reportId || !volunteerId) {
+    throw new Error('Missing reportId or volunteerId.');
+  }
+
+  const reportRef = db.collection('reports').doc(reportId);
+  const volunteerRef = db.collection('volunteers').doc(volunteerId);
+  const taskUpdateRef = db.collection('taskUpdates').doc();
+
+  const result = await db.runTransaction(async (transaction) => {
+    const [reportSnapshot, volunteerSnapshot] = await Promise.all([
+      transaction.get(reportRef),
+      transaction.get(volunteerRef),
+    ]);
+
+    if (!volunteerSnapshot.exists) {
+      throw new Error('NOT_REGISTERED');
+    }
+
+    const volunteerData = volunteerSnapshot.data() || {};
+    if (volunteerData.approved !== true) {
+      throw new Error('NOT_APPROVED');
+    }
+
+    if (!reportSnapshot.exists) {
+      throw new Error('NOT_FOUND');
+    }
+
+    const reportData = reportSnapshot.data() || {};
+    const claimableStatuses = ['open', 'pending', 'notifying'];
+
+    if (reportData.assignedTo) {
+      throw new Error('ALREADY_ASSIGNED');
+    }
+
+    if (!claimableStatuses.includes(String(reportData.status || ''))) {
+      throw new Error('CLAIM_UNAVAILABLE');
+    }
+
+    const responderName = volunteerData.name || 'Responder';
+
+    transaction.update(reportRef, {
+      assignedTo: volunteerId,
+      assignedAt: new Date().toISOString(),
+      assignedResponderName: responderName,
+      progressNote: `${responderName} accepted your report and is preparing the safest route to your location.`,
+      etaText: 'Route check in progress',
+      status: 'assigned',
+      missionStatus: 'assigned',
+      updatedAt: new Date().toISOString(),
+    });
+
+    transaction.set(
+      volunteerRef,
+      {
+        currentTaskId: reportId,
+        isAvailable: false,
+        status: 'on_task',
+        lastAssignedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    transaction.set(taskUpdateRef, {
+      taskId: reportId,
+      volunteerId,
+      userName: responderName,
+      type: 'claim',
+      title: 'Responder accepted the mission',
+      message: `${responderName} has taken ownership of this incident and is getting ready to move.`,
+      note: `System Audit: Mission claimed by verified responder ${responderName} (UID: ${String(volunteerId).slice(0, 8)})`,
+      createdAt: new Date().toISOString(),
+    });
+
+    return {
+      reportId,
+      volunteerId,
+      responderName,
+    };
+  });
+
+  const relatedNotifications = await db.collection('notifications').where('reportId', '==', reportId).get();
+  const batch = db.batch();
+
+  relatedNotifications.forEach((notificationDoc) => {
+    const notification = notificationDoc.data() || {};
+    if (['pending', 'queued'].includes(notification.status)) {
+      batch.set(
+        notificationDoc.ref,
+        {
+          status: notification.recipientId === volunteerId ? 'accepted' : 'expired',
+          updatedAt: new Date().toISOString(),
+          isRead: notification.recipientId === volunteerId ? true : notification.isRead,
+          read: notification.recipientId === volunteerId ? true : notification.read,
+        },
+        { merge: true }
+      );
+    }
+  });
+
+  await batch.commit();
+  return result;
+};
+
 export const processReportNotifications = async (report) => {
   if (!report?.location?.lat || !report?.location?.lng) {
     throw new Error('Report location must include lat/lng coordinates.');

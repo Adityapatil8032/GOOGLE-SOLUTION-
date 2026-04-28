@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './core/firebase/config';
 import { useStore } from './core/store/useStore';
 import { isVolunteerConsoleEnabled } from './core/utils/user';
@@ -44,16 +44,10 @@ const App = () => {
 
   // Persist auth state across refreshes using Firebase onAuthStateChanged
   useEffect(() => {
-    let unsubscribeUserProfile: () => void = () => {};
-    let unsubscribeVolunteerProfile: () => void = () => {};
-    let unsubscribeAdminProfile: () => void = () => {};
     let notificationsRequestedForUid: string | null = null;
+    let cancelled = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      unsubscribeUserProfile();
-      unsubscribeVolunteerProfile();
-      unsubscribeAdminProfile();
-
       if (firebaseUser) {
         const baseUser = {
           id: firebaseUser.uid,
@@ -67,21 +61,23 @@ const App = () => {
           volunteerRegistered: false,
         };
 
-        let userProfileData: Record<string, unknown> | null = null;
-        let volunteerProfileData: Record<string, unknown> | null = null;
-        let adminProfileData: Record<string, unknown> | null = null;
-        let userLoaded = false;
-        let adminLoaded = false;
+        try {
+          const [userSnapshot, volunteerSnapshot, adminSnapshot] = await Promise.all([
+            getDoc(doc(db, 'users', firebaseUser.uid)),
+            getDoc(doc(db, 'volunteers', firebaseUser.uid)),
+            getDoc(doc(db, 'admins', firebaseUser.uid)),
+          ]);
 
-        const syncUserState = () => {
-          // Wait for both user and admin profiles to be checked before releasing authLoading
-          if (!userLoaded || !adminLoaded) return;
+          if (cancelled) return;
 
+          const userProfileData = userSnapshot.exists() ? userSnapshot.data() : {};
+          const volunteerProfileData = volunteerSnapshot.exists() ? volunteerSnapshot.data() : null;
+          const adminProfileData = adminSnapshot.exists() ? adminSnapshot.data() : null;
           const mergedUser = {
             ...baseUser,
-            ...(userProfileData || {}),
+            ...userProfileData,
             ...(volunteerProfileData || {}),
-            role: adminProfileData ? 'admin' : (userProfileData?.role || 'user'),
+            role: adminProfileData ? 'admin' : (userProfileData.role || 'user'),
             volunteerRegistered: volunteerProfileData !== null,
             isVolunteerApproved: volunteerProfileData?.approved === true,
           };
@@ -96,48 +92,12 @@ const App = () => {
                 requestFirebaseNotificationPermission(firebaseUser.uid);
              });
           }
-        };
-
-        unsubscribeUserProfile = onSnapshot(
-          doc(db, 'users', firebaseUser.uid),
-          (userSnapshot) => {
-            userProfileData = userSnapshot.exists() ? userSnapshot.data() : {};
-            userLoaded = true;
-            syncUserState();
-          },
-          (error) => {
-            console.error('Error restoring user profile:', error);
-            userLoaded = true;
-            syncUserState();
-          },
-        );
-
-        unsubscribeVolunteerProfile = onSnapshot(
-          doc(db, 'volunteers', firebaseUser.uid),
-          (volunteerSnapshot) => {
-            volunteerProfileData = volunteerSnapshot.exists() ? volunteerSnapshot.data() : null;
-            syncUserState();
-          },
-          (error) => {
-            console.error('Error restoring volunteer profile:', error);
-            volunteerProfileData = null;
-            syncUserState();
-          },
-        );
-        unsubscribeAdminProfile = onSnapshot(
-          doc(db, 'admins', firebaseUser.uid),
-          (adminSnapshot) => {
-            adminProfileData = adminSnapshot.exists() ? adminSnapshot.data() : null;
-            adminLoaded = true;
-            syncUserState();
-          },
-          (error) => {
-            console.error('Error restoring admin profile:', error);
-            adminProfileData = null;
-            adminLoaded = true;
-            syncUserState();
-          },
-        );
+        } catch (error) {
+          console.error('Error restoring user bootstrap data:', error);
+          if (cancelled) return;
+          setUser(baseUser);
+          setAuthLoading(false);
+        }
       } else {
         notificationsRequestedForUid = null;
         setUser(null);
@@ -146,9 +106,7 @@ const App = () => {
     });
 
     return () => {
-      unsubscribeUserProfile();
-      unsubscribeVolunteerProfile();
-      unsubscribeAdminProfile();
+      cancelled = true;
       unsubscribe();
     };
   }, [setUser]);

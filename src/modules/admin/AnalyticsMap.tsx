@@ -3,7 +3,6 @@ import { GoogleMap, useJsApiLoader, HeatmapLayer } from '@react-google-maps/api'
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../core/firebase/config';
 import { googleMapsLibraries, googleMapsScriptId } from '../../core/maps/googleMaps';
-import { googleMapsMapId } from '../../config/googleMaps';
 
 export const AnalyticsMap = () => {
   const [timeRange, setTimeRange] = useState('24h');
@@ -101,7 +100,6 @@ export const AnalyticsMap = () => {
               zoom={13}
               options={{
                 styles: mapStyles,
-                mapId: googleMapsMapId,
                 disableDefaultUI: true,
                 zoomControl: true,
               }}

@@ -9,6 +9,7 @@ interface FullMapScreenProps {
   reports: any[];
   volunteers: any[];
   onAssignVolunteer?: (report: any, volunteer?: any) => void;
+  onViewDetails?: (report: any) => void;
   isFullScreen?: boolean;
   focusLocation?: { lat: number; lng: number } | null;
   selectedReportId?: string | null;
@@ -37,6 +38,7 @@ export const FullMapScreen: React.FC<FullMapScreenProps> = ({
   reports,
   volunteers,
   onAssignVolunteer,
+  onViewDetails,
   isFullScreen = true,
   focusLocation = null,
   selectedReportId = null,
@@ -186,7 +188,10 @@ export const FullMapScreen: React.FC<FullMapScreenProps> = ({
                           🙋 Assign Volunteer
                         </button>
                       )}
-                      <button style={{ height: 32, padding: '0 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11, fontWeight: 800 }}>
+                      <button 
+                        onClick={() => onViewDetails && onViewDetails(selectedMarker.data)}
+                        style={{ height: 32, padding: '0 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                      >
                         📞 Details
                       </button>
                     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { apiUrl } from '../../core/config/api';
 
 interface Message {
   id: string;
@@ -43,7 +44,7 @@ export const Assistant = () => {
     setLoading(true);
 
     try {
-       const response = await fetch('/api/chat/sync', {
+       const response = await fetch(apiUrl('/api/chat/sync'), {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ message }),

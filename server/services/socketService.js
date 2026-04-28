@@ -21,13 +21,18 @@ const safeVolunteerOfflineUpdate = async (userId) => {
 export const initializeSocket = (httpServer) => {
   if (ioInstance) return ioInstance;
 
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    ...String(process.env.CLIENT_ORIGIN || '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  ];
+
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        process.env.CLIENT_ORIGIN,
-      ].filter(Boolean),
+      origin: allowedOrigins,
       credentials: true,
     },
   });

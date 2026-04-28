@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { apiUrl } from '../../core/config/api';
 import { useStore } from '../../core/store/useStore';
 
 export const VolunteerAssistant = () => {
@@ -27,7 +28,7 @@ export const VolunteerAssistant = () => {
     setLoading(true);
     
     try {
-      const response = await fetch('/api/chat/sync', {
+      const response = await fetch(apiUrl('/api/chat/sync'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: input }),

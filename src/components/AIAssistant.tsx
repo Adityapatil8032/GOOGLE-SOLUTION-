@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiUrl } from '../core/config/api';
 
 interface AIAssistantProps {
   currentUser: {
@@ -72,7 +73,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ currentUser }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/ai/chat', {
+      const response = await fetch(apiUrl('/api/ai/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,7 +109,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ currentUser }) => {
 
   const resetChat = async () => {
     try {
-      await fetch('/api/ai/reset', {
+      await fetch(apiUrl('/api/ai/reset'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id })
